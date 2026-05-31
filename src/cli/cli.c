@@ -262,6 +262,19 @@ static bool find_in_path(const char *name, char *out, size_t out_sz) {
         if (is_executable(out)) {
             return true;
         }
+#ifdef _WIN32
+        /* On Windows executables carry an extension (PATHEXT). A CLI like
+         * opencode is often installed as a .cmd / .ps1 / .exe shim (e.g. via
+         * mise or npm), so the bare-name probe above misses it (#221). Try the
+         * common executable extensions before moving to the next PATH entry. */
+        static const char *const win_exts[] = {".exe", ".cmd", ".bat", ".ps1", NULL};
+        for (int i = 0; win_exts[i]; i++) {
+            snprintf(out, out_sz, "%s/%s%s", dir, name, win_exts[i]);
+            if (is_executable(out)) {
+                return true;
+            }
+        }
+#endif
         dir = strtok_r(NULL, PATH_DELIM, &saveptr);
     }
     return false;
