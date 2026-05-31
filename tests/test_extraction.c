@@ -120,6 +120,38 @@ TEST(extract_ts_factory_object_methods_issue341) {
     PASS();
 }
 
+/* --- C/C++ preprocessor macros become Macro nodes (#375) --- */
+TEST(extract_c_macros_issue375) {
+    CBMFileResult *r = extract("#define SIMPLE_MACRO 1\n"
+                               "#define FN_MACRO(x) (2 * (x))\n"
+                               "#define EMPTY_MACRO\n"
+                               "int main(void) { return FN_MACRO(SIMPLE_MACRO); }\n",
+                               CBM_LANG_C, "p", "macros.c");
+    ASSERT_NOT_NULL(r);
+    ASSERT_FALSE(r->has_error);
+    ASSERT(has_def(r, "Macro", "SIMPLE_MACRO"));
+    ASSERT(has_def(r, "Macro", "FN_MACRO"));
+    ASSERT(has_def(r, "Macro", "EMPTY_MACRO"));
+    ASSERT(has_def(r, "Function", "main")); /* macros don't displace function defs */
+    cbm_free_result(r);
+    PASS();
+}
+
+TEST(extract_cpp_macros_issue375) {
+    CBMFileResult *r = extract("#define MAX(a, b) ((a) > (b) ? (a) : (b))\n"
+                               "#define PI 3.14159\n"
+                               "namespace n {\n"
+                               "int f() { return MAX(1, 2); }\n"
+                               "}\n",
+                               CBM_LANG_CPP, "p", "macros.cpp");
+    ASSERT_NOT_NULL(r);
+    ASSERT_FALSE(r->has_error);
+    ASSERT(has_def(r, "Macro", "MAX"));
+    ASSERT(has_def(r, "Macro", "PI"));
+    cbm_free_result(r);
+    PASS();
+}
+
 /* --- Java --- */
 TEST(java_class) {
     CBMFileResult *r = extract(
@@ -2385,6 +2417,8 @@ SUITE(extraction) {
     RUN_TEST(extract_r_box_use_imports_issue218);
     RUN_TEST(extract_r_dollar_call_issue219);
     RUN_TEST(extract_ts_factory_object_methods_issue341);
+    RUN_TEST(extract_c_macros_issue375);
+    RUN_TEST(extract_cpp_macros_issue375);
 
     /* OOP */
     RUN_TEST(java_class);

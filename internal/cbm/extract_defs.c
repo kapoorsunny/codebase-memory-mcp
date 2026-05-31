@@ -3577,6 +3577,47 @@ static void push_class_body_children(TSNode node, const CBMLangSpec *spec, walk_
     }
 }
 
+// Languages that use the C preprocessor and therefore have #define macros.
+static bool is_c_preprocessor_lang(CBMLanguage lang) {
+    return lang == CBM_LANG_C || lang == CBM_LANG_CPP || lang == CBM_LANG_CUDA ||
+           lang == CBM_LANG_GLSL || lang == CBM_LANG_OBJC || lang == CBM_LANG_ISPC;
+}
+
+// C/C++ preprocessor macros become Macro nodes (#375):
+//   #define SIMPLE 1          -> preproc_def
+//   #define FN(x) (2 * (x))   -> preproc_function_def
+// The name is the `name` field; a function-like macro's parameter list is kept
+// as the signature. The macro body (a preproc_arg) is not descended into.
+static void extract_c_macro_def(CBMExtractCtx *ctx, TSNode node) {
+    CBMArena *a = ctx->arena;
+    TSNode name_node = ts_node_child_by_field_name(node, TS_FIELD("name"));
+    if (ts_node_is_null(name_node)) {
+        return;
+    }
+    char *name = cbm_node_text(a, name_node, ctx->source);
+    if (!name || !name[0]) {
+        return;
+    }
+
+    CBMDefinition def;
+    memset(&def, 0, sizeof(def));
+    def.name = name;
+    def.qualified_name = cbm_fqn_compute(a, ctx->project, ctx->rel_path, name);
+    def.label = "Macro";
+    def.file_path = ctx->rel_path;
+    def.start_line = ts_node_start_point(node).row + TS_LINE_OFFSET;
+    def.end_line = ts_node_end_point(node).row + TS_LINE_OFFSET;
+    def.lines = (int)(def.end_line - def.start_line + TS_LINE_OFFSET);
+    def.is_exported = true; // macros have no translation-unit scoping — globally visible
+
+    TSNode params = ts_node_child_by_field_name(node, TS_FIELD("parameters"));
+    if (!ts_node_is_null(params)) {
+        def.signature = cbm_node_text(a, params, ctx->source);
+    }
+
+    cbm_defs_push(&ctx->result->defs, a, def);
+}
+
 static void walk_defs(CBMExtractCtx *ctx, TSNode root, const CBMLangSpec *spec, int depth_unused) {
     (void)depth_unused;
     walk_defs_frame_t stack[CBM_WALK_DEFS_STACK_CAP];
@@ -3592,6 +3633,12 @@ static void walk_defs(CBMExtractCtx *ctx, TSNode root, const CBMLangSpec *spec, 
         if (ctx->language == CBM_LANG_ELIXIR && strcmp(kind, "call") == 0) {
             extract_elixir_call(ctx, node, spec);
             continue;
+        }
+
+        if (is_c_preprocessor_lang(ctx->language) &&
+            (strcmp(kind, "preproc_def") == 0 || strcmp(kind, "preproc_function_def") == 0)) {
+            extract_c_macro_def(ctx, node);
+            continue; // the macro body is a preproc_arg — nothing more to extract
         }
 
         if (cbm_kind_in_set(node, spec->function_node_types)) {
