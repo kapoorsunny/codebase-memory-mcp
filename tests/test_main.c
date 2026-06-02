@@ -54,6 +54,7 @@ extern void suite_py_lsp_scale(void);
 extern void suite_ts_lsp(void);
 extern void suite_java_lsp(void);
 extern void suite_java_lsp_coverage(void);
+extern void suite_kotlin_lsp(void);
 extern void suite_store_arch(void);
 extern void suite_store_bulk(void);
 extern void suite_store_pragmas(void);
@@ -139,6 +140,7 @@ int main(void) {
     RUN_SUITE(cs_lsp);
     RUN_SUITE(cs_lsp_bench);
     RUN_SUITE(py_lsp);
+    RUN_SUITE(kotlin_lsp);
     RUN_SUITE(py_lsp_bench);
     RUN_SUITE(py_lsp_stress);
     RUN_SUITE(py_lsp_scale);
